@@ -98,6 +98,7 @@ class ApcCamera : public rclcpp::Node
         void getLanuchParams();
         void deleteDevice();
         void dynamicChangeMode(int mode);
+        void print_qos(const rclcpp::QoS & qos);
 
         std::shared_ptr<sensor_msgs::msg::Image> ConvertFrameToMessage(cv::Mat & frame, const std::string enc);
         rclcpp::Time frameTime2Ros(uint64_t t, rcl_clock_type_t clock_type = RCL_ROS_TIME);
@@ -117,6 +118,10 @@ class ApcCamera : public rclcpp::Node
         bool imu_data_callback(const libeYs3D::sensors::SensorData *sensorData);
         //-CallBack function
 
+        std::string qos2str(rmw_qos_history_policy_t qos);
+        std::string qos2str(rmw_qos_reliability_policy_t qos);
+        std::string qos2str(rmw_qos_durability_policy_t qos);
+
     private:
         //+Publishers
         std::string left_color_topic;
@@ -134,6 +139,9 @@ class ApcCamera : public rclcpp::Node
         //imuPub pub_imu_processed;
         posePub pub_pose;
         //-Publishers
+
+        //Qos
+        rclcpp::QoS mQos;
 
         //+Camera infos
         camInfoMsgPtr left_info_ptr;
@@ -198,6 +206,12 @@ class ApcCamera : public rclcpp::Node
 
             std::string serial_number_;
             std::string kernel_name_;
+
+            rmw_qos_history_policy_t qos_hist_;
+            int qos_depth_;
+            rmw_qos_reliability_policy_t qos_reliability_;
+            rmw_qos_durability_policy_t qos_durability_;
+
         }device_params_t;
         device_params_t params_;
 

@@ -35,6 +35,7 @@ class DMPreviewSubscriber : public rclcpp::Node
     rclcpp::QoS video_qos(10);
     video_qos.keep_last(10);
     video_qos.best_effort();
+    //video_qos.reliable();
     video_qos.durability_volatile();
 
     RCLCPP_INFO(this->get_logger(),"listen ...");

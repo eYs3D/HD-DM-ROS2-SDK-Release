@@ -7,7 +7,8 @@ namespace dmpreview
 {
 
 ApcCamera::ApcCamera(const rclcpp::NodeOptions& options)
-: Node("apc_node", options)
+    : Node("apc_node", options)
+    , mQos(1)
 {
     RCLCPP_INFO(get_logger(), "********************************");
     RCLCPP_INFO(get_logger(), "            APC Camera          ");
@@ -135,6 +136,13 @@ void ApcCamera::setDefaultParams() {
     this->declare_parameter<std::string>("points_topic", "/apc/points/data_raw");
     this->declare_parameter<std::string>("imu_topic", "/apc/imu/data_raw");
     this->declare_parameter<std::string>("imu_processed_topic", "/apc/imu/data_raw_processed");
+
+    //for QoS
+    this->declare_parameter<int>("qos_history", RMW_QOS_POLICY_HISTORY_KEEP_LAST);
+    this->declare_parameter<int>("qos_depth", 5);
+    this->declare_parameter<int>("qos_reliability", RMW_QOS_POLICY_RELIABILITY_RELIABLE);
+    this->declare_parameter<int>("qos_durability", RMW_QOS_POLICY_DURABILITY_VOLATILE);
+
 }
 void ApcCamera::getLanuchParams() {
     RCLCPP_INFO(get_logger(), "load lanuch params ...");
@@ -187,23 +195,74 @@ void ApcCamera::getLanuchParams() {
     this->get_parameter("imu_processed_topic", imu_processed_topic);
     //-get params from launch
 
+    //+get QoS porfile
+    rclcpp::Parameter paramVal;
+    if (this->get_parameter("qos_history", paramVal))
+    {
+      params_.qos_hist_ = paramVal.as_int() == 1 ? RMW_QOS_POLICY_HISTORY_KEEP_LAST : RMW_QOS_POLICY_HISTORY_KEEP_ALL;
+      mQos.history(params_.qos_hist_);
+    }
+    else
+    {
+      RCLCPP_WARN(get_logger(), "The parameter '%s' is not available, using the default value", "qos_history");
+    }
+    RCLCPP_INFO(get_logger(), " * QoS History: %s", qos2str(params_.qos_hist_).c_str());
+
+    if (this->get_parameter("qos_depth", paramVal))
+    {
+      params_.qos_depth_ = paramVal.as_int();
+      mQos.keep_last(params_.qos_depth_);
+    }
+    else
+    {
+      RCLCPP_WARN(get_logger(), "The parameter '%s' is not available, using the default value", "qos_depth");
+    }
+    RCLCPP_INFO(get_logger(), " * QoS History depth: %d", params_.qos_depth_);
+
+    if (get_parameter("qos_reliability", paramVal))
+    {
+      params_.qos_reliability_ =
+          paramVal.as_int() == 1 ? RMW_QOS_POLICY_RELIABILITY_RELIABLE : RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
+      mQos.reliability(params_.qos_reliability_);
+    }
+    else
+    {
+      RCLCPP_WARN(get_logger(), "The parameter '%s' is not available, using the default value", "qos_reliability");
+    }
+    RCLCPP_INFO(get_logger(), " * QoS Reliability: %s", qos2str(params_.qos_reliability_).c_str());
+
+    if (get_parameter("qos_durability", paramVal))
+    {
+      params_.qos_durability_ =
+          paramVal.as_int() == 1 ? RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL : RMW_QOS_POLICY_DURABILITY_VOLATILE;
+      mQos.durability(params_.qos_durability_);
+    }
+    else
+    {
+      RCLCPP_WARN(get_logger(), "The parameter '%s' is not available, using the default value", "qos_durability");
+    }
+    RCLCPP_INFO(get_logger(), " * QoS Durability: %s", qos2str(params_.qos_durability_).c_str());
+    //-get QoS porfile
+
     //+publishers
     rmw_qos_profile_t qos_profile = rmw_qos_profile_default;
 
-    pub_left_color = image_transport::create_camera_publisher(this, left_color_topic, qos_profile);
+    print_qos(mQos);
+
+    pub_left_color = image_transport::create_camera_publisher(this, left_color_topic, mQos.get_rmw_qos_profile());
     RCLCPP_INFO_STREAM(get_logger(), "Advertised on topic: " << pub_left_color.getTopic());
 
-    pub_depth = image_transport::create_camera_publisher(this, depth_topic, qos_profile);
+    pub_depth = image_transport::create_camera_publisher(this, depth_topic, mQos.get_rmw_qos_profile());
     RCLCPP_INFO_STREAM(get_logger(), "Advertised on topic: " << pub_depth.getTopic());
 
-    pub_points = create_publisher<sensor_msgs::msg::PointCloud2>(points_topic, 1);
+    pub_points = create_publisher<sensor_msgs::msg::PointCloud2>(points_topic, mQos/*1*/);
     RCLCPP_INFO_STREAM(get_logger(), "Advertised on topic: " << pub_points->get_topic_name());
 
     rclcpp::QoS mPoseQos(1);
     pub_pose = create_publisher<geometry_msgs::msg::PoseStamped>(imu_topic, mPoseQos);
     RCLCPP_INFO_STREAM(get_logger(), "Advertised on topic: " << pub_pose->get_topic_name());
-
     //-publishers
+
     RCLCPP_INFO(get_logger(), "...load lanuch params done");
 }
 
@@ -1083,6 +1142,84 @@ camInfoMsgPtr ApcCamera::createCameraInfo(const CameraIntrinsics& in) {
     camera_info_ptr->r[8] = in.r[8];
 
     return camera_info_ptr;
+}
+std::string ApcCamera::qos2str(rmw_qos_history_policy_t qos) {
+    if (qos == RMW_QOS_POLICY_HISTORY_KEEP_LAST) {
+        return "KEEP_LAST";
+    }
+
+    if (qos == RMW_QOS_POLICY_HISTORY_KEEP_ALL) {
+        return "KEEP_ALL";
+    }
+
+    return "Unknown QoS value";
+}
+
+std::string ApcCamera::qos2str(rmw_qos_reliability_policy_t qos) {
+    if (qos == RMW_QOS_POLICY_RELIABILITY_RELIABLE) {
+        return "RELIABLE";
+    }
+
+    if (qos == RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT) {
+        return "BEST_EFFORT";
+    }
+
+    return "Unknown QoS value";
+}
+
+std::string ApcCamera::qos2str(rmw_qos_durability_policy_t qos) {
+    if (qos == RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL) {
+        return "TRANSIENT_LOCAL";
+    }
+
+    if (qos == RMW_QOS_POLICY_DURABILITY_VOLATILE) {
+        return "VOLATILE";
+    }
+
+    return "Unknown QoS value";
+}
+
+void ApcCamera::print_qos(const rclcpp::QoS & qos)
+{
+  const auto & rmw_qos = qos.get_rmw_qos_profile();
+  std::cout << "HISTORY POLICY: ";
+  switch (rmw_qos.history) {
+    case RMW_QOS_POLICY_HISTORY_KEEP_LAST:
+      std::cout << "keep last";
+      break;
+    case RMW_QOS_POLICY_HISTORY_KEEP_ALL:
+      std::cout << "keep all";
+      break;
+    default:
+      std::cout << "invalid";
+  }
+  std::cout << " (depth: " << rmw_qos.depth << ')' << std::endl;
+
+  std::cout << "RELIABILITY POLICY: ";
+  switch (rmw_qos.reliability) {
+    case RMW_QOS_POLICY_RELIABILITY_RELIABLE:
+      std::cout << "reliable";
+      break;
+    case RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT:
+      std::cout << "best effort";
+      break;
+    default:
+      std::cout << "invalid";
+  }
+  std::cout << std::endl;
+
+  std::cout << "DURABILITY POLICY: ";
+  switch (rmw_qos.durability) {
+    case RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:
+      std::cout << "transient local";
+      break;
+    case RMW_QOS_POLICY_DURABILITY_VOLATILE:
+      std::cout << "volatile";
+      break;
+    default:
+      std::cout << "invalid";
+  }
+  std::cout << std::endl;
 }
 
 }  // namespace dmpreview

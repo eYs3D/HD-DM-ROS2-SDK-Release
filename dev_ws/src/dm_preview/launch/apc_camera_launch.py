@@ -34,6 +34,9 @@ def generate_launch_description():
     else :
         camera_model_1 = 'dm_preview'
     ####################################################################
+    # eYs3D Configurations to be loaded by APC Node
+
+    qos_config_dir = os.path.join(get_package_share_directory('dm_preview'), 'config', 'common.yaml')
 
     ld = LaunchDescription()
 
@@ -57,7 +60,7 @@ def generate_launch_description():
             # use:
             # -set camera mode (refer to PIF)
             # -set camera config by manual if set 0
-            "auto_config_camera_mode": 1,
+            "auto_config_camera_mode": 3,
 
             # Manual setting START [
             "framerate": 30,
@@ -125,7 +128,8 @@ def generate_launch_description():
             "depth_topic": "depth/image_raw",
             "points_topic": "points/data_raw",
             "imu_topic": "imu/data_raw",
-            "imu_processed_topic": "imu/data_raw_processed"}
+            "imu_processed_topic": "imu/data_raw_processed"},
+            qos_config_dir
         ]
     )
 
@@ -217,7 +221,8 @@ def generate_launch_description():
             "depth_topic": "depth/image_raw",
             "points_topic": "points/data_raw",
             "imu_topic": "imu/data_raw",
-            "imu_processed_topic": "imu/data_raw_processed"}
+            "imu_processed_topic": "imu/data_raw_processed"},
+            qos_config_dir
         ]
     )
     COLOR_TF_node = Node(
