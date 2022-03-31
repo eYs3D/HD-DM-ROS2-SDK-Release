@@ -28,7 +28,7 @@ def generate_launch_description():
 
     if multi_module == True :
         camera_model_1 = 'dm8036'
-        dev_1_serial_number = "00000001"
+        dev_1_serial_number = "8036D9AF800115"
         camera_model_2 = 'dm8062'
         dev_2_serial_number = "80625APA00022"
     else :
@@ -112,7 +112,6 @@ def generate_launch_description():
             "exposure_time_step": -5,
             "white_balance_temperature": 3000,
             "ir_intensity": 3,
-            #00000001 for 8036
             "dev_serial_number": dev_1_serial_number,
             "kernel_name": "",
 
@@ -138,7 +137,7 @@ def generate_launch_description():
         executable="apc_camera_node",
         name=camera_model_2,
         output="screen",
-        namespace="apc_1",
+        namespace="apc",
         emulate_tty=True,
         parameters=[{
             "multi_module": multi_module,
@@ -153,7 +152,7 @@ def generate_launch_description():
             # use:
             # -set camera mode (refer to PIF)
             # -set camera config by manual if set 0
-            "auto_config_camera_mode": 0,
+            "auto_config_camera_mode": 2,
             
             # Manual setting START [
             "framerate": 60,
@@ -216,12 +215,12 @@ def generate_launch_description():
             "imu_frame": "imu_frame",
             "imu_frame_processed": "imu_frame_processed",
 
-            "left_color_topic": "left/image_color",
-            "right_color_topic": "right/image_color",
-            "depth_topic": "depth/image_raw",
-            "points_topic": "points/data_raw",
-            "imu_topic": "imu/data_raw",
-            "imu_processed_topic": "imu/data_raw_processed"},
+            "left_color_topic": camera_model_2+"/left/image_color",
+            "right_color_topic": camera_model_2+"/right/image_color",
+            "depth_topic": camera_model_2+"/depth/image_raw",
+            "points_topic": camera_model_2+"/points/data_raw",
+            "imu_topic": camera_model_2+"/imu/data_raw",
+            "imu_processed_topic": camera_model_2+"/imu/data_raw_processed"},
             qos_config_dir
         ]
     )
@@ -256,4 +255,5 @@ def generate_launch_description():
     ld.add_action(PC_TF_node)
     ld.add_action(IMU_TF_node)
     ld.add_action(RVIZ_node)
+
     return ld

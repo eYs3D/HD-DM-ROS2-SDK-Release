@@ -404,6 +404,14 @@ void ApcCamera::openDevice() {
 
             if (!device) continue;
 
+            if (!params_.serial_number_.empty()) {
+                RCLCPP_INFO(this->get_logger(), "serial number: %s", params_.serial_number_.c_str());
+                if (strcmp(params_.serial_number_.c_str(),
+                    device->getCameraDeviceInfo().serialNumber)) {
+                    continue;
+                }
+            }
+
             index = i;
             break;
         }
