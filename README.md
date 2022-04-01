@@ -322,6 +322,25 @@ To change a parameter’s value at runtime.
 
 ----------  
   
+## Launch two ROS2 Application  
+   If there are two modules and each module needs to open a ROS2 node, please set it as follows:
+   * Set serial number of 1st camera module in the launch file for the master ROS2, for example set  
+     "dev_serial_number": "8036D9AF800115",  
+     ![image](https://user-images.githubusercontent.com/88474678/160577757-34cc3bd9-9b44-4a71-abb8-b9d222583ae7.png) 
+   * Set serial number of 2ed camera module and modify topic name in the launch file for the slave ROS2, for example set   
+     "dev_serial_number": "80625APA00022",  
+     "left_color_topic": "dm8062/left/image_color",  
+     "right_color_topic": "dm8062/right/image_color",  
+     "depth_topic": "dm8062/depth/image_raw",  
+     "points_topic": "dm8062/points/data_raw",  
+     "imu_topic": "dm8062/imu/data_raw",  
+     "imu_processed_topic": "dm8062/imu/data_raw_processed"  
+     ![image](https://user-images.githubusercontent.com/88474678/160577461-b1834ece-8597-4bde-93f6-e3298897f6e4.png)  
+     ![image](https://user-images.githubusercontent.com/88474678/160577578-901ece9b-7802-45a3-b1e8-53688e4053f5.png)  
+   * After launch rviz, please select correct topic for slave module  
+   ![2022-03-29 16-34-25 的螢幕擷圖](https://user-images.githubusercontent.com/88474678/160578602-d4f752c4-84d3-4a08-bdde-1ffc9bbfa8e8.png)  
+
+----------   
 ## Published Topics  
    The published topics differ according to the device and parameters. After running the above command,  
    the following list of topics will be available (This is a partial list. For full one type ros2 topic list):  
