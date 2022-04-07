@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(dm_preview VERSION 0.0.0.3)
+project(dm_preview VERSION 0.0.0.4)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)

@@ -245,7 +245,11 @@ typedef enum {
 #define APC_USER_DATA_FILE_ID_0				200
 #define APC_USER_DATA_FILE_SIZE_0			1024
 #define APC_USER_DATA_FILE_SIZE_1			4096
-// for Flash Read/Write -
+#define APC_BACKUP_USER_DATA_FILE_ID        201
+#define APC_BACKUP_USER_DATA_SIZE           1024
+
+
+
 
 // for device information +
 typedef struct tagDEVINFORMATION {
@@ -290,6 +294,9 @@ typedef struct tagDEVINFORMATION {
 #define APC_PID_HYPATIA 0x0160
 #define APC_PID_HYPATIA2 0x0173
 #define APC_PID_8062    0x0162
+#define APC_PID_8063     0x0164
+#define APC_PID_8063_K   0x0165
+#define APC_PID_IVY     0x0177
 #define APC_PID_GRAP    0x0179
 #define APC_PID_GRAP_K  0x0183
 #define APC_PID_GRAP_SLAVE   0x0279
@@ -343,7 +350,8 @@ typedef enum {
     FW_PLUGIN,
     BOOTLOADER_ONLY,
     FW_ONLY,
-    PLUGIN_ONLY
+    PLUGIN_ONLY,
+    UNP
 } FLASH_DATA_TYPE;
 // for total and fw+plugin read/write -
 
@@ -472,6 +480,15 @@ typedef enum
 #define PU_PROPERTY_ID_WHITE_BALANCE_CTRL 			10
 #define PU_PROPERTY_ID_WHITE_BALANCE_AUTO_CTRL 	    11
 
+//Auto-Exposure Mode Control
+#define AE_MOD_MANUAL_MODE							0x01
+#define AE_MOD_AUTO_MODE							0x02
+#define AE_MOD_SHUTTER_PRIORITY_MODE				0x04
+#define AE_MOD_APERTURE_PRIORITY_MODE				0x08
+
+// White Balance Temperature, Auto Control
+#define PU_PROPERTY_ID_AWB_DISABLE 	    			0
+#define PU_PROPERTY_ID_AWB_ENABLE 	    			1
 // for Rectify Log +
 
 typedef struct eSPCtrl_RectLogData {
@@ -532,6 +549,7 @@ typedef struct eSPCtrl_RectLogData {
 			float			RECT_AvgErr;/**< Reprojection error */
 			unsigned short	nLineBuffers;/**< Linebuffer for Hardware limitation < 60 */
             float ReProjectMat[16];
+            float K6Ratio; //Ratio for distortion K6
 		};
 	};
 } eSPCtrl_RectLogData;
@@ -750,6 +768,14 @@ struct APCImageType
         }
     }
 };
+/**
+ * @param M_dst input camera matrix of RGB-lens, including intrinsic parameters, such as RectifyLog-CamMat2 (M3).
+ *              The buffer size is 9.
+ * @param R_dst_to_src input rotation matrix of dst-lens to src-lens, dst is the camera at left side, src is the camera at
+ *                     right side, such as RectifyLog-RotaMat (R31). The buffer size is 9.
+ * @param T_dst_to_src  input translation matrix of dst-lens to src-lens, such as RectifyLog-TranMat (T13).
+ *                     The buffer size is 3.
+ */
 
 struct PointCloudInfo
 {
@@ -760,10 +786,13 @@ struct PointCloudInfo
     float disparityToW[ 2048 ];
     int   disparity_len;
     WORD  wDepthType;
-//multi-lens data
+    int depth_image_edian; //0: lillte-edian, 1: big-edia
+    //multi-lens data
     float focalLength_K;
     float baseline_K;
     float diff_K;
-    int depth_image_edian; //0: lillte-edian, 1: big-edia
+    float slaveDeviceCamMat2[9];
+    float slaveDeviceRotaMat[9];
+    float slaveDeviceTranMat[3];
 };
 #endif // LIB_ESPDI_DEF_H

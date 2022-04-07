@@ -9,6 +9,6 @@
 #define WRAPPER_VERSION "1.0.0.1"
 #define GIT_BRANCH "sinet_dev"
 #define GIT_HASH "fa4a4ffd"
-#define BUILD_TIMESTAMP "2021-12-28 15:49:21"
+#define BUILD_TIMESTAMP "2022-04-07 09:02:21"
 
 #endif // VERSION_UTILS_H_IN
