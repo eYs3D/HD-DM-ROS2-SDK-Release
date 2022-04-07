@@ -319,9 +319,34 @@ To change a parameter’s value at runtime.
    ros2 param set /apc/dm_preview white_balance_temperature 3500
    ```
    ![set_param](https://user-images.githubusercontent.com/88474678/134876649-b0b4d416-41d6-46cf-9fc8-8771be360120.png)
+   
+----------  
+## Quality of Service (QoS) settings 
+  The base QoS profile currently includes settings for the following policies.  
+  Users can change the default value by themselves in the following files :  
+  ```
+  /dev_ws/src/dm_preview/config/common.yaml
+  ```
+  - History
+
+    - Keep last: only store up to N samples, configurable via the queue depth option.
+    - Keep all: store all samples, subject to the configured resource limits of the underlying middleware.
+
+  - Depth
+
+    - Queue size: only honored if the “history” policy was set to “keep last”.
+
+  - Reliability
+
+    - Best effort: attempt to deliver samples, but may lose them if the network is not robust.
+    - Reliable: guarantee that samples are delivered, may retry multiple times.
+
+  - Durability
+
+    - Transient local: the publisher becomes responsible for persisting samples for “late-joining” subscriptions.
+    - Volatile: no attempt is made to persist samples.
 
 ----------  
-  
 ## Launch two ROS2 Application  
    If there are two modules and each module needs to open a ROS2 node, please set it as follows:
    * Set serial number of 1st camera module in the launch file for the master ROS2, for example set  
