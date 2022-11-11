@@ -318,11 +318,11 @@ To change a parameter’s value at runtime.
    ```
    ros2 param set /apc/dm_preview white_balance_temperature 3500
    ```
-   ![set_param](https://user-images.githubusercontent.com/88474678/134876649-b0b4d416-41d6-46cf-9fc8-8771be360120.png)
-   
+  ![sett](https://user-images.githubusercontent.com/88474678/164411597-00c03d56-e24d-4b81-afc6-f9be674ca5a8.png)
+
 ----------  
 ## Quality of Service (QoS) settings 
-  The base QoS profile currently includes settings for the following policies.  
+  The base QoS profile currently includes settings for the following policies:  
   Users can change the default value by themselves in the following files :  
   ```
   /dev_ws/src/dm_preview/config/common.yaml
