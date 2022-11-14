@@ -8,6 +8,8 @@ The ROS SDK allows you to use eYs3D Depth Cameras with ROS2.
 
 * Support x86_64 (64-bit)
 * Tested on X86 PC with Ubuntu 20.04  
+* Support ARM aarch64  (64-bit)
+* Tested on ARM64 NVIDIA® Jetson Nano™ with Ubuntu 20.04
 * These are the currently supported ROS2 Distributions:   
   - Foxy Fitzroy (Ubuntu 20.04 Focal)
 
