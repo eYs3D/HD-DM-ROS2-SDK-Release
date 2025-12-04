@@ -1,0 +1,78 @@
+version: '3.9'
+
+services:
+  ros2-foxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eys3d-ros2-foxy
+
+    # Enable interactive terminal
+    stdin_open: true
+    tty: true
+
+    # Network configuration
+    network_mode: host
+
+    # Environment variables
+    environment:
+      # ROS2 configuration
+      - ROS_DISTRO=foxy
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_DOMAIN_ID=0
+
+      # X11 display forwarding
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+
+      # Runtime behavior
+      - COLCON_DEFAULTS_BUILD_SPACE_HIDDEN=1
+
+    # Volume mounts
+    volumes:
+      # Workspace mount (read-write for building and developing)
+      - .:/home/ros/workspace:rw
+
+      # X11 socket for GUI applications (RViz)
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/home/ros/.Xauthority:ro
+
+      # Optional: ROS logs directory (for persistence across container restarts)
+      - ros-logs:/home/ros/.ros/log
+
+    # Device access for camera and USB
+    devices:
+      # USB devices - required for camera access
+      - /dev/bus/usb:/dev/bus/usb:rw
+      # Video devices (for any video inputs)
+      - /dev/video0:/dev/video0:rw
+      - /dev/video1:/dev/video1:rw
+
+    # Runtime and privileges
+    privileged: false
+
+    # Resource limits (adjust based on your system)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 2G
+
+    # Container restart policy
+    restart: unless-stopped
+
+    # Working directory
+    working_dir: /home/ros/workspace
+
+volumes:
+  ros-logs:
+    driver: local
+
+# Network configuration
+networks:
+  default:
+    name: eys3d-network
+    driver: bridge
