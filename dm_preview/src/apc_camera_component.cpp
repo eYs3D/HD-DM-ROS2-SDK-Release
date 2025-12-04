@@ -48,8 +48,9 @@ ApcCamera::ApcCamera(const rclcpp::NodeOptions& options)
     depth_info_ptr = createCameraInfo(in.left);
     //-Calibration info
 
-    // Dynamic parameters callback
-    set_on_parameters_set_callback(std::bind(&ApcCamera::paramChange_callback, this, _1));
+    // Dynamic parameters callback (Humble compatible API)
+    callback_handle_ = this->add_on_set_parameters_callback(
+        std::bind(&ApcCamera::paramChange_callback, this, _1));
 }
 
 ApcCamera::~ApcCamera() {
