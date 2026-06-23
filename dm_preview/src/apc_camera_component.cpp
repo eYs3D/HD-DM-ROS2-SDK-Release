@@ -48,8 +48,9 @@ ApcCamera::ApcCamera(const rclcpp::NodeOptions& options)
     depth_info_ptr = createCameraInfo(in.left);
     //-Calibration info
 
-    // Dynamic parameters callback
-    set_on_parameters_set_callback(std::bind(&ApcCamera::paramChange_callback, this, _1));
+    // Dynamic parameters callback (Humble compatible API)
+    callback_handle_ = this->add_on_set_parameters_callback(
+        std::bind(&ApcCamera::paramChange_callback, this, _1));
 }
 
 ApcCamera::~ApcCamera() {
@@ -278,14 +279,47 @@ void ApcCamera::getModeConfig(int mode) {
     }
     auto currentUSBType = device_->getUsbPortType();
     unsigned short pid = device_->getCameraDeviceInfo().devInfo.wPID;
+
+    RCLCPP_INFO(get_logger(), "Device info - PID: 0x%04x, USB Type: %d", pid, (int)currentUSBType);
+
     modeConfigOptions = device_->getModeConfigOptions(currentUSBType, pid);
 
+    if (!modeConfigOptions) {
+        RCLCPP_ERROR(get_logger(), "Failed to get mode config options! modeConfigOptions is null");
+        exit(-1);
+    }
+
+    RCLCPP_INFO(get_logger(), "Available modes count: %d", modeConfigOptions->GetModeCount());
+
+    // List all available modes for debugging
+    auto availableModes = modeConfigOptions->GetModes();
+    RCLCPP_INFO(get_logger(), "Available modes:");
+    for (size_t i = 0; i < availableModes.size(); i++) {
+        RCLCPP_INFO(get_logger(), "  Mode %d: iMode=%d, USB_Type=%d, K_Res=%dx%d, T_Res=%dx%d, InterleaveModeFPS=%d",
+                    (int)i, availableModes[i].iMode, availableModes[i].iUSB_Type,
+                    availableModes[i].K_Resolution.Width, availableModes[i].K_Resolution.Height,
+                    availableModes[i].T_Resolution.Width, availableModes[i].T_Resolution.Height,
+                    availableModes[i].iInterLeaveModeFPS);
+    }
+
+    bool modeFound = false;
     for (auto& modeItem : modeConfigOptions->GetModes()) {
-        if (modeItem.iMode == mode && APC_OK == modeConfigOptions->SelectCurrentIndex(mode)) {
-            RCLCPP_INFO(get_logger(), "Found input camera mode : %d", mode);
-            break;
+        if (modeItem.iMode == mode) {
+            int result = modeConfigOptions->SelectCurrentIndex(mode);
+            if (result == APC_OK) {
+                RCLCPP_INFO(get_logger(), "Found input camera mode : %d", mode);
+                modeFound = true;
+                break;
+            } else {
+                RCLCPP_WARN(get_logger(), "SelectCurrentIndex(%d) failed with error: %d", mode, result);
+            }
         }
     }
+
+    if (!modeFound) {
+        RCLCPP_ERROR(get_logger(), "Requested mode %d not found in available modes!", mode);
+    }
+
     RCLCPP_INFO(get_logger(), "select camera mode : %d", modeConfigOptions->GetCurrentIndex());
     modeConfig = modeConfigOptions->GetCurrentModeInfo();
     RCLCPP_INFO(get_logger(), "iMode: %d, iUSB_Type: %d, iInterLeaveModeFPS: %d, bRectifyMode: %d\n",
@@ -300,57 +334,123 @@ void ApcCamera::getModeConfig(int mode) {
                       modeConfig.vecColorFps.empty() ? 0 : modeConfig.vecColorFps.at(0),
                       modeConfig.vecDepthFps.empty() ? 0 : modeConfig.vecDepthFps.at(0));
 
+    // Check if this is 80363 camera (PIDs: 0x0202 or 0x0211)
+    bool is80363 = (pid == 0x0202 || pid == 0x0211);
 
-    if (modeConfig.vecDepthType.empty()) {
-        depth_raw_data_type = libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_OFF_RAW;
-    } else {
-        switch(modeConfig.vecDepthType.at(0)){
-            case 8:
-                depth_raw_data_type = modeConfig.bRectifyMode ?
-                                            libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_8_BITS:
-                                            libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_8_BITS_RAW;
-                break;
-            case 11:
-                depth_raw_data_type = modeConfig.bRectifyMode ?
-                                            libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_11_BITS:
-                                            libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_11_BITS_RAW;
-                break;
-            case 14:
-                depth_raw_data_type = modeConfig.bRectifyMode ?
-                                            libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_14_BITS:
-                                            libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_14_BITS_RAW;
-                break;
+    if (is80363) {
+        RCLCPP_INFO(get_logger(), "Detected 80363 camera (PID: 0x%04x), using 80363-specific mode parsing", pid);
+
+        // For 80363, parse the mode config based on database structure
+        // Parse K_Resolution for color format (eDecodeType_K) and dimensions (K_Resolution)
+        // Color format from eDecodeType_K
+        moduleModeConfig_.colorFormat = (modeConfig.eDecodeType_K == ModeConfig::MODE_CONFIG::MJPEG) ?
+                                        libeYs3D::video::COLOR_RAW_DATA_MJPG :
+                                        libeYs3D::video::COLOR_RAW_DATA_YUY2;
+
+        // Check if Mode_Description is depth-only ("D")
+        std::string modeDescription = modeConfig.csModeDesc;
+        bool isDepthOnly = (modeDescription == "D");
+
+        // Set color dimensions from K_Resolution
+        if (isDepthOnly) {
+            moduleModeConfig_.colorWidth = 0;
+            moduleModeConfig_.colorHeight = 0;
+            RCLCPP_INFO(get_logger(), "Depth-only mode detected, setting color dimensions to 0");
+        } else {
+            moduleModeConfig_.colorWidth = modeConfig.K_Resolution.Width;
+            moduleModeConfig_.colorHeight = modeConfig.K_Resolution.Height;
         }
-    }
 
-    if ((device_->getCameraDeviceInfo().devInfo.wPID == 0x120 || device_->getCameraDeviceInfo().devInfo.wPID == 0x137) 
-            && modeConfig.D_Resolution.Height == 360) {
-        depth_raw_data_type = static_cast<libeYs3D::video::DEPTH_RAW_DATA_TYPE>(depth_raw_data_type + APC_DEPTH_DATA_SCALE_DOWN_MODE_OFFSET);
-        RCLCPP_INFO(get_logger(), "set scale down mode");
-    }
+        // Parse fps from Color_FPS (vecColorFps)
+        moduleModeConfig_.fps = !modeConfig.vecColorFps.empty() ? modeConfig.vecColorFps.at(0) :
+                                (!modeConfig.vecDepthFps.empty() ? modeConfig.vecDepthFps.at(0) : 30);
 
-    if (modeConfig.iInterLeaveModeFPS > 0) {
-        depth_raw_data_type = static_cast<libeYs3D::video::DEPTH_RAW_DATA_TYPE>(depth_raw_data_type + APC_DEPTH_DATA_INTERLEAVE_MODE_OFFSET);
-        moduleModeConfig_.interLeaveMode = true;
-        RCLCPP_INFO(get_logger(), "this mode supports interleave mode");
+        // Parse depth resolution from T_Resolution
+        moduleModeConfig_.depthWidth = modeConfig.T_Resolution.Width;
+        moduleModeConfig_.depthHeight = modeConfig.T_Resolution.Height;
+
+        // Get base K_VideoMode from database (parsed by ModeConfig based on iInterLeaveModeFPS)
+        //   - Non-ILM: K_VideoMode 11bits = 0x18 (24), K_VideoMode 14 bits = 0x19 (25)
+        //   - ILM:     K_VideoMode 11bits = 0x1A (26), K_VideoMode 14 bits = 0x1B (27)
+        int baseKVideoMode = modeConfig.videoModeD11OrColorOnly;
+
+        // Check interleave mode
+        moduleModeConfig_.interLeaveMode = (modeConfig.iInterLeaveModeFPS > 0);
+
+        // Determine depth bit depth from vecDepthType (11 or 14 bits) FIXME logic uses 0 for default:
+        int depthBits = (!modeConfig.vecDepthType.empty()) ? modeConfig.vecDepthType.at(0) : 11;
+
+        // Select final video mode based on depth bits
+        // For ORANGE chip:
+        //   11-bit ILM:     0x18 (DEPTH_RAW_DATA_ORANGE_11_BITS_ILM)
+        //   14-bit ILM:     0x19 (DEPTH_RAW_DATA_ORANGE_14_BITS_ILM)
+        //   11-bit non-ILM: 0x1A (DEPTH_RAW_DATA_ORANGE_11_BITS)
+        //   14-bit non-ILM: 0x1B (DEPTH_RAW_DATA_ORANGE_14_BITS)
+
+        moduleModeConfig_.videoMode = depthBits == 11 ? modeConfig.videoModeD11OrColorOnly : modeConfig.videoModeZ14;
+
+        RCLCPP_INFO(get_logger(), "80363 mode config parsed: format=%s, color=%dx%d, depth=%dx%d, fps=%d, depthBits=%d,"
+                                  "videoMode=0x%02X (%d), interleave=%s, rectifyIndex=%d",
+                    (moduleModeConfig_.colorFormat == libeYs3D::video::COLOR_RAW_DATA_YUY2) ? "YUYV" : "MJPEG",
+                    moduleModeConfig_.colorWidth, moduleModeConfig_.colorHeight,
+                    moduleModeConfig_.depthWidth, moduleModeConfig_.depthHeight,
+                    moduleModeConfig_.fps, depthBits, moduleModeConfig_.videoMode, moduleModeConfig_.videoMode,
+                    moduleModeConfig_.interLeaveMode ? "True" : "False",
+                    modeConfig.rectifyFileIndex);
+
     } else {
-        moduleModeConfig_.interLeaveMode = false;
+        // Original PUMA IC module logic
+        if (modeConfig.vecDepthType.empty()) {
+            depth_raw_data_type = libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_OFF_RAW;
+        } else {
+            switch(modeConfig.vecDepthType.at(0)){
+                case 8:
+                    depth_raw_data_type = modeConfig.bRectifyMode ?
+                                          libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_8_BITS:
+                                          libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_8_BITS_RAW;
+                    break;
+                case 11:
+                    depth_raw_data_type = modeConfig.bRectifyMode ?
+                                          libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_11_BITS:
+                                          libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_11_BITS_RAW;
+                    break;
+                case 14:
+                    depth_raw_data_type = modeConfig.bRectifyMode ?
+                                          libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_14_BITS:
+                                          libeYs3D::video::DEPTH_RAW_DATA_TYPE::DEPTH_RAW_DATA_14_BITS_RAW;
+                    break;
+            }
+        }
+
+        if ((device_->getCameraDeviceInfo().devInfo.wPID == 0x120 || device_->getCameraDeviceInfo().devInfo.wPID == 0x137)
+            && modeConfig.D_Resolution.Height == 360) {
+            depth_raw_data_type = static_cast<libeYs3D::video::DEPTH_RAW_DATA_TYPE>(depth_raw_data_type + APC_DEPTH_DATA_SCALE_DOWN_MODE_OFFSET);
+            RCLCPP_INFO(get_logger(), "set scale down mode");
+        }
+
+        if (modeConfig.iInterLeaveModeFPS > 0) {
+            depth_raw_data_type = static_cast<libeYs3D::video::DEPTH_RAW_DATA_TYPE>(depth_raw_data_type + APC_DEPTH_DATA_INTERLEAVE_MODE_OFFSET);
+            moduleModeConfig_.interLeaveMode = true;
+            RCLCPP_INFO(get_logger(), "this mode supports interleave mode");
+        } else {
+            moduleModeConfig_.interLeaveMode = false;
+        }
+
+        moduleModeConfig_.videoMode = depth_raw_data_type;
+        moduleModeConfig_.colorFormat = modeConfig.eDecodeType_L == ModeConfig::MODE_CONFIG::YUYV ?
+                                        libeYs3D::video::COLOR_RAW_DATA_YUY2 : libeYs3D::video::COLOR_RAW_DATA_MJPG;
+        moduleModeConfig_.colorWidth = modeConfig.L_Resolution.Width;
+        moduleModeConfig_.colorHeight = modeConfig.L_Resolution.Height;
+        moduleModeConfig_.fps = !modeConfig.vecColorFps.empty() ? modeConfig.vecColorFps.at(0) : modeConfig.vecDepthFps.at(0);
+        moduleModeConfig_.depthWidth = modeConfig.D_Resolution.Width;
+        moduleModeConfig_.depthHeight = modeConfig.D_Resolution.Height;
     }
 
-    moduleModeConfig_.videoMode = depth_raw_data_type;
-    moduleModeConfig_.colorFormat = modeConfig.eDecodeType_L == ModeConfig::MODE_CONFIG::YUYV ?
-            libeYs3D::video::COLOR_RAW_DATA_YUY2 : libeYs3D::video::COLOR_RAW_DATA_MJPG;
-    moduleModeConfig_.colorWidth = modeConfig.L_Resolution.Width;
-    moduleModeConfig_.colorHeight = modeConfig.L_Resolution.Height;
-    moduleModeConfig_.fps = !modeConfig.vecColorFps.empty() ? modeConfig.vecColorFps.at(0) : modeConfig.vecDepthFps.at(0);
-    moduleModeConfig_.depthWidth = modeConfig.D_Resolution.Width;
-    moduleModeConfig_.depthHeight = modeConfig.D_Resolution.Height;
-
-    RCLCPP_INFO(get_logger(), "mode config: {%s, %d, %d, %d fps, %d, %d, %d, %s} depth_raw_data_type=%d\n", 
-            (moduleModeConfig_.colorFormat == ModeConfig::MODE_CONFIG::YUYV) ? "YUYV":"MJPG", 
-            moduleModeConfig_.colorWidth, moduleModeConfig_.colorHeight, moduleModeConfig_.fps,
-            moduleModeConfig_.depthWidth, moduleModeConfig_.depthHeight, moduleModeConfig_.videoMode,
-            moduleModeConfig_.interLeaveMode ? "True" : "False", moduleModeConfig_.videoMode);
+    RCLCPP_INFO(get_logger(), "mode config: {%s, %d, %d, %d fps, %d, %d, %d, %s} videoMode=%d\n",
+                (moduleModeConfig_.colorFormat == libeYs3D::video::COLOR_RAW_DATA_YUY2) ? "YUYV":"MJPG",
+                moduleModeConfig_.colorWidth, moduleModeConfig_.colorHeight, moduleModeConfig_.fps,
+                moduleModeConfig_.depthWidth, moduleModeConfig_.depthHeight, moduleModeConfig_.videoMode,
+                moduleModeConfig_.interLeaveMode ? "True" : "False", moduleModeConfig_.videoMode);
 }
 
 void ApcCamera::openDevice() {

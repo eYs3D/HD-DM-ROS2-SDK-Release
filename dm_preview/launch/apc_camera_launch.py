@@ -92,6 +92,10 @@ def generate_launch_description():
             # -type_8_bits_scale_down = 33
             # -type_14_bits_scale_down = 34
             # -type_11_bits_scale_down = 36
+            # -type_11_bits_esp936_disparity = 0x18
+            # -type_14_bits_esp936_distance_interleave_mode = 0x1A
+            # -type_11_bits_esp936_disparity_interleave_mode = 0x19
+            # -type_14_bits_esp936_distance_interleave_mode = 0x1B
             "depth_data_type": 4,
 
             # interleave mode
@@ -184,6 +188,10 @@ def generate_launch_description():
             # -type_8_bits_scale_down = 33
             # -type_14_bits_scale_down = 34
             # -type_11_bits_scale_down = 36
+            # -type_11_bits_esp936_disparity = 0x18
+            # -type_14_bits_esp936_distance_interleave_mode = 0x1A
+            # -type_11_bits_esp936_disparity_interleave_mode = 0x19
+            # -type_14_bits_esp936_distance_interleave_mode = 0x1B
             "depth_data_type": 4,
 
             # interleave mode

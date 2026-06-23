@@ -26,7 +26,7 @@
 
 #include "tf2_msgs/msg/tf_message.hpp"
 #include <tf2/LinearMath/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "std_msgs/msg/string.hpp"
 
@@ -238,6 +238,9 @@ class ApcCamera : public rclcpp::Node
         libeYs3D::video::Producer::Callback mDepthStreamCallback;
         libeYs3D::video::PCProducer::PCCallback mPCStreamCallback;
         libeYs3D::sensors::SensorDataProducer::AppCallback mIMUStreamCallback;
+
+        // Parameter callback handle (required for ROS2 Humble+)
+        rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 
 };
 

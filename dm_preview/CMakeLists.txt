@@ -30,7 +30,9 @@ set(DEPENDENCIES
     std_msgs
     tf2
     tf2_ros
+    tf2_geometry_msgs
     sensor_msgs
+    stereo_msgs
     OpenCV
     cv_bridge
 )
@@ -44,8 +46,10 @@ find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(stereo_msgs REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(cv_bridge REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 find_package(OpenCV REQUIRED)
 if(OpenCV_FOUND)
