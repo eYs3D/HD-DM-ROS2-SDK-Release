@@ -86,9 +86,10 @@ class ApcCamera : public rclcpp::Node
             int depthHeight;
             int videoMode;
             bool interLeaveMode;
+            int rectifyIndex;            // 80363: DB K_Index; PUMA: RECTIFY_FILE_INDEX
         } module_mode_config_t;
         module_mode_config_t moduleModeConfig_ = {
-            0 ,1280 ,720 ,30 ,1280 ,720 ,4 ,false
+            0 ,1280 ,720 ,30 ,1280 ,720 ,4 ,false ,0
         };
 
         void getModeConfig(int mode);
@@ -191,6 +192,7 @@ class ApcCamera : public rclcpp::Node
             int depth_height_;
             int depth_data_type_;
             bool interleave_mode_;
+            int rectify_log_index_;   // ZD/rectify table index (G120 depth modes need 3; DB K_Index)
             DepthOutputType depth_output_type_;
 
             int z_maximum_mm_;

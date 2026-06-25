@@ -92,14 +92,24 @@ def generate_launch_description():
             # -type_8_bits_scale_down = 33
             # -type_14_bits_scale_down = 34
             # -type_11_bits_scale_down = 36
-            # -type_11_bits_esp936_disparity = 0x18
-            # -type_14_bits_esp936_distance_interleave_mode = 0x1A
-            # -type_11_bits_esp936_disparity_interleave_mode = 0x19
-            # -type_14_bits_esp936_distance_interleave_mode = 0x1B
-            "depth_data_type": 4,
+            # eSP936 / G120 legacy firmware:
+            # -type_11_bits_esp936_disparity              = 0x18
+            # -type_14_bits_esp936_distance               = 0x19
+            # -type_11_bits_esp936_disparity_interleave   = 0x1A
+            # -type_14_bits_esp936_distance_interleave    = 0x1B
+            # eSP936 / G120 new firmware (_V2):
+            # -type_11_bits_esp936_disparity              = 0x48
+            # -type_14_bits_esp936_distance               = 0x49
+            # -type_11_bits_esp936_disparity_interleave   = 0x4A
+            # -type_14_bits_esp936_distance_interleave    = 0x4B
+            "depth_data_type": 0x48,
 
             # interleave mode
             "interleave_mode": False,
+
+            # rectify_log_index (ZD/rectify table index). G120 depth modes need 3 (DB K_Index);
+            # color-only / non-G120 use 0.
+            "rectify_log_index": 3,
 
             # depth_output_type
             # use:
@@ -188,14 +198,24 @@ def generate_launch_description():
             # -type_8_bits_scale_down = 33
             # -type_14_bits_scale_down = 34
             # -type_11_bits_scale_down = 36
-            # -type_11_bits_esp936_disparity = 0x18
-            # -type_14_bits_esp936_distance_interleave_mode = 0x1A
-            # -type_11_bits_esp936_disparity_interleave_mode = 0x19
-            # -type_14_bits_esp936_distance_interleave_mode = 0x1B
-            "depth_data_type": 4,
+            # eSP936 / G120 legacy firmware:
+            # -type_11_bits_esp936_disparity              = 0x18
+            # -type_14_bits_esp936_distance               = 0x19
+            # -type_11_bits_esp936_disparity_interleave   = 0x1A
+            # -type_14_bits_esp936_distance_interleave    = 0x1B
+            # eSP936 / G120 new firmware (_V2):
+            # -type_11_bits_esp936_disparity              = 0x48
+            # -type_14_bits_esp936_distance               = 0x49
+            # -type_11_bits_esp936_disparity_interleave   = 0x4A
+            # -type_14_bits_esp936_distance_interleave    = 0x4B
+            "depth_data_type": 0x48,
 
             # interleave mode
             "interleave_mode": False,
+
+            # rectify_log_index (ZD/rectify table index). G120 depth modes need 3 (DB K_Index);
+            # color-only / non-G120 use 0.
+            "rectify_log_index": 3,
 
             # depth_output_type
             # use:

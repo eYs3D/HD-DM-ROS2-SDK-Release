@@ -90,6 +90,7 @@ void ApcCamera::setDefaultParams() {
     this->declare_parameter<int>("depth_height", 720, descriptor);
     this->declare_parameter<int>("depth_data_type", 4, descriptor);
     this->declare_parameter<bool>("interleave_mode", false, descriptor);
+    this->declare_parameter<int>("rectify_log_index", 3, descriptor);
     this->declare_parameter<int>("depth_output_type", 2, descriptor);
     this->declare_parameter<int>("depth_maximum_mm", 1000, descriptor);
     this->declare_parameter<bool>("state_ae", true);
@@ -165,6 +166,7 @@ void ApcCamera::getLanuchParams() {
     this->get_parameter("depth_width", params_.depth_width_);
     this->get_parameter("depth_height", params_.depth_height_);
     this->get_parameter("depth_data_type", params_.depth_data_type_);
+    this->get_parameter("rectify_log_index", params_.rectify_log_index_);
     this->get_parameter("interleave_mode", params_.interleave_mode_);
 
     int depth_output_type;
@@ -270,7 +272,7 @@ void ApcCamera::getLanuchParams() {
 void ApcCamera::getModeConfig(int mode) {
     RCLCPP_INFO(get_logger(), "input camera mode : %d", mode);
     moduleModeConfig_ = {
-        0 , 1280 ,720 , 30 ,1280 ,720, 4, false
+        0 , 1280 ,720 , 30 ,1280 ,720, 4, false, 0
     };
 
     if (!device_) {
@@ -369,25 +371,17 @@ void ApcCamera::getModeConfig(int mode) {
         moduleModeConfig_.depthWidth = modeConfig.T_Resolution.Width;
         moduleModeConfig_.depthHeight = modeConfig.T_Resolution.Height;
 
-        // Get base K_VideoMode from database (parsed by ModeConfig based on iInterLeaveModeFPS)
-        //   - Non-ILM: K_VideoMode 11bits = 0x18 (24), K_VideoMode 14 bits = 0x19 (25)
-        //   - ILM:     K_VideoMode 11bits = 0x1A (26), K_VideoMode 14 bits = 0x1B (27)
-        int baseKVideoMode = modeConfig.videoModeD11OrColorOnly;
-
-        // Check interleave mode
         moduleModeConfig_.interLeaveMode = (modeConfig.iInterLeaveModeFPS > 0);
 
-        // Determine depth bit depth from vecDepthType (11 or 14 bits) FIXME logic uses 0 for default:
+        // Depth bits (11/14) select which DB video-mode column to use.
         int depthBits = (!modeConfig.vecDepthType.empty()) ? modeConfig.vecDepthType.at(0) : 11;
 
-        // Select final video mode based on depth bits
-        // For ORANGE chip:
-        //   11-bit ILM:     0x18 (DEPTH_RAW_DATA_ORANGE_11_BITS_ILM)
-        //   14-bit ILM:     0x19 (DEPTH_RAW_DATA_ORANGE_14_BITS_ILM)
-        //   11-bit non-ILM: 0x1A (DEPTH_RAW_DATA_ORANGE_11_BITS)
-        //   14-bit non-ILM: 0x1B (DEPTH_RAW_DATA_ORANGE_14_BITS)
-
-        moduleModeConfig_.videoMode = depthBits == 11 ? modeConfig.videoModeD11OrColorOnly : modeConfig.videoModeZ14;
+        // videoMode: sourced directly from the 26-column DB columns
+        //   Video_Mode_D11_ColorOnly (11-bit) / Video_Mode_Z14 (14-bit), e.g. 0x48/0x49/0x4a/0x4b.
+        moduleModeConfig_.videoMode    = (depthBits == 11) ? modeConfig.videoModeD11OrColorOnly
+                                                           : modeConfig.videoModeZ14;
+        // rectifyIndex: 80363 uses the DB K_Index column.
+        moduleModeConfig_.rectifyIndex = modeConfig.iK_Index;
 
         RCLCPP_INFO(get_logger(), "80363 mode config parsed: format=%s, color=%dx%d, depth=%dx%d, fps=%d, depthBits=%d,"
                                   "videoMode=0x%02X (%d), interleave=%s, rectifyIndex=%d",
@@ -396,7 +390,7 @@ void ApcCamera::getModeConfig(int mode) {
                     moduleModeConfig_.depthWidth, moduleModeConfig_.depthHeight,
                     moduleModeConfig_.fps, depthBits, moduleModeConfig_.videoMode, moduleModeConfig_.videoMode,
                     moduleModeConfig_.interLeaveMode ? "True" : "False",
-                    modeConfig.rectifyFileIndex);
+                    moduleModeConfig_.rectifyIndex);
 
     } else {
         // Original PUMA IC module logic
@@ -444,6 +438,8 @@ void ApcCamera::getModeConfig(int mode) {
         moduleModeConfig_.fps = !modeConfig.vecColorFps.empty() ? modeConfig.vecColorFps.at(0) : modeConfig.vecDepthFps.at(0);
         moduleModeConfig_.depthWidth = modeConfig.D_Resolution.Width;
         moduleModeConfig_.depthHeight = modeConfig.D_Resolution.Height;
+        // rectifyIndex: PUMA legacy uses RECTIFY_FILE_INDEX.
+        moduleModeConfig_.rectifyIndex = modeConfig.rectifyFileIndex;
     }
 
     RCLCPP_INFO(get_logger(), "mode config: {%s, %d, %d, %d fps, %d, %d, %d, %s} videoMode=%d\n",
@@ -546,6 +542,7 @@ void ApcCamera::openDevice() {
         params_.depth_height_ = moduleModeConfig_.depthHeight;
         params_.depth_data_type_ = moduleModeConfig_.videoMode;
         params_.interleave_mode_ = moduleModeConfig_.interLeaveMode;
+        params_.rectify_log_index_ = moduleModeConfig_.rectifyIndex;   // DB-driven (80363:K_Index / PUMA:RECTIFY_FILE_INDEX)
     }
 
     if (params_.enable_point_cloud_stream_) {
@@ -604,7 +601,7 @@ void ApcCamera::openDevice() {
         params_.color_width_, params_.color_height_, params_.framerate_,
         (libeYs3D::video::DEPTH_RAW_DATA_TYPE)params_.depth_data_type_,
         params_.depth_width_, params_.depth_height_,
-        DEPTH_IMG_COLORFUL_TRANSFER, IMAGE_SN_SYNC, 0,
+        DEPTH_IMG_COLORFUL_TRANSFER, IMAGE_SN_SYNC, params_.rectify_log_index_,
         params_.enable_color_stream_ ? mColorStreamCallback : nullptr,
         params_.enable_depth_stream_ ? mDepthStreamCallback : nullptr,
         params_.enable_point_cloud_stream_ ? mPCStreamCallback : nullptr,
